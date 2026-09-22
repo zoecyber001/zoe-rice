@@ -100,15 +100,34 @@ if [[ -n "$LATEST_BACKUP" ]] && [[ -d "$LATEST_BACKUP" ]]; then
     cd -
 fi
 
-# ── Restore default dconf ────────────────────────────────────────
-DCONF_BACKUP="$LATEST_BACKUP/dconf-full-backup.dconf"
-if [[ -f "$DCONF_BACKUP" ]]; then
-    read -rp "Restore full dconf state from backup? This resets ALL GNOME settings. [y/N] " dconf_confirm
-    if [[ "$dconf_confirm" =~ ^[Yy]$ ]]; then
-        dconf load / < "$DCONF_BACKUP"
-        log "Full dconf state restored"
+# ── Restore dconf settings ────────────────────────────────────────
+if [[ -d "$LATEST_BACKUP/dconf-partial" ]]; then
+    read -rp "Restore modified GNOME settings (dconf) from backup? [Y/n] " dconf_confirm
+    if [[ -z "$dconf_confirm" || "$dconf_confirm" =~ ^[Yy]$ ]]; then
+        for backup_path_file in "$LATEST_BACKUP/dconf-partial/"*.path; do
+            [[ -f "$backup_path_file" ]] || continue
+            base="${backup_path_file%.path}"
+            dconf_path="$(cat "$backup_path_file")"
+            if [[ -f "$base.bak" ]]; then
+                dconf load "$dconf_path" < "$base.bak"
+                log "Restored dconf: $dconf_path"
+            fi
+        done
+        log "Partial dconf state restored successfully."
     else
         warn "Skipped dconf restore. Extension settings may remain."
+    fi
+else
+    # Fallback to full dconf if partial isn't available (older backups)
+    DCONF_BACKUP="$LATEST_BACKUP/dconf-full-backup.dconf"
+    if [[ -f "$DCONF_BACKUP" ]]; then
+        read -rp "DANGER: Restore FULL dconf state from backup? This resets ALL GNOME settings. [y/N] " dconf_confirm
+        if [[ "$dconf_confirm" =~ ^[Yy]$ ]]; then
+            dconf load / < "$DCONF_BACKUP"
+            log "Full dconf state restored."
+        else
+            warn "Skipped full dconf restore."
+        fi
     fi
 fi
 

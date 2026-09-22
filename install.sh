@@ -53,14 +53,17 @@ done
 header "Pre-flight Checks"
 
 if [[ ! -f /etc/os-release ]]; then
-    err "Cannot determine OS. This installer targets Fedora 44+."
-    exit 1
+    warn "Cannot determine OS. This installer targets Fedora."
+else
+    source /etc/os-release
+    if [[ "$ID" != "fedora" ]]; then
+        warn "Detected $PRETTY_NAME (not Fedora). Package names may differ."
+    fi
 fi
 
-source /etc/os-release
-if [[ "$ID" != "fedora" ]]; then
-    warn "Detected $PRETTY_NAME (not Fedora). Package install may differ."
-    warn "Continuing anyway — config files and dconf settings are portable."
+if ! command -v dnf &>/dev/null; then
+    warn "'dnf' package manager not found. Automatically skipping package installation."
+    SKIP_DNF=true
 fi
 
 if [[ "$XDG_CURRENT_DESKTOP" != *"GNOME"* ]]; then
@@ -368,9 +371,12 @@ header "Phase 7: GNOME Settings (dconf)"
 if $DRY_RUN; then
     info "[dry-run] Would load dconf settings from $DOTFILES_DIR/dconf/"
 else
-    # Backup current dconf state
+    # Backup current dconf state (full)
     dconf dump / > "$BACKUP_DIR/dconf-full-backup.dconf"
     info "Full dconf state backed up to $BACKUP_DIR/dconf-full-backup.dconf"
+    
+    # Directory for specific path backups
+    mkdir -p "$BACKUP_DIR/dconf-partial"
 
     # Load extension settings
     declare -A DCONF_MAP=(
@@ -392,6 +398,10 @@ else
         dconf_file="$DOTFILES_DIR/dconf/$file"
         dconf_path="${DCONF_MAP[$file]}"
         if [[ -f "$dconf_file" ]] && [[ -s "$dconf_file" ]]; then
+            # Safely backup the exact path before overwriting
+            dconf dump "$dconf_path" > "$BACKUP_DIR/dconf-partial/$file.bak"
+            echo "$dconf_path" > "$BACKUP_DIR/dconf-partial/$file.path"
+
             dconf load "$dconf_path" < "$dconf_file"
             log "Loaded: $file → $dconf_path"
         else

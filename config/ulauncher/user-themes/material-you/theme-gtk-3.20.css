@@ -1,0 +1,7 @@
+@import url("theme.css");
+.input {
+    caret-color: @accentColor;
+}
+.selected.item-box {
+    border: none;
+}

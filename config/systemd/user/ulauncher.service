@@ -1,0 +1,12 @@
+[Unit]
+Description=Ulauncher Application Launcher
+Documentation=https://ulauncher.io
+
+[Service]
+Type=simple
+Environment=GDK_BACKEND=x11
+ExecStart=/home/zoecyber/.local/bin/ulauncher start
+Restart=always
+
+[Install]
+WantedBy=default.target

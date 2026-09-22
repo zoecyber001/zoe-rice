@@ -1,0 +1,14 @@
+[/]
+activate-launcher=['<Super>slash']
+active-hint=true
+active-hint-border-radius=uint32 12
+fullscreen-launcher=false
+gap-inner=uint32 6
+gap-outer=uint32 8
+hint-color-rgba='rgba(255, 184, 120, 0.95)'
+show-title=false
+smart-gaps=true
+snap-to-grid=false
+tile-by-default=false
+tile-enter=@as []
+toggle-floating=['<Super><Shift>f']

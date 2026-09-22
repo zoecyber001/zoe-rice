@@ -1,0 +1,19 @@
+{
+  "arrow_key_aliases": "hjkl",
+  "auto_resume": false,
+  "base_width": 750,
+  "close_on_focus_out": true,
+  "disable_desktop_filters": false,
+  "enable_application_mode": true,
+  "grab_mouse_pointer": false,
+  "jump_keys": "1234567890abcdefghijklmnopqrstuvwxyz",
+  "keep_alive": true,
+  "layer_shell": true,
+  "max_recent_apps": 0,
+  "raise_if_started": false,
+  "render_on_screen": "mouse-pointer-monitor",
+  "show_tray_icon": true,
+  "theme_name": "material-you",
+  "tray_icon_name": "ulauncher-indicator-symbolic",
+  "window_shadow": 5
+}

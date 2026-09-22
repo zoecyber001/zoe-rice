@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""
+Architect's Note:
+Matugen GNOME Material You Pipeline Bridge
+-----------------------------------------
+Synchronizes GNOME 50 desktop environment, GTK 3/4 (libadwaita), and Kitty terminal
+with dynamic Google Material 3 palettes extracted from the current active wallpaper.
+
+Usage:
+    matugen-gnome                  # Re-apply theme for current active wallpaper
+    matugen-gnome /path/to/img.png # Set wallpaper and update theme
+    matugen-gnome --random         # Pick random wallpaper from ~/Pictures/Wallpapers
+    matugen-gnome --watch          # Run background watcher on GNOME wallpaper changes
+"""
+
+import sys
+import os
+import glob
+import random
+import colorsys
+import json
+import subprocess
+from pathlib import Path
+from urllib.parse import urlparse, unquote
+
+WALLPAPERS_DIR = Path.home() / "Pictures" / "Wallpapers"
+FALLBACK_DIR = Path.home() / "Pictures"
+
+GNOME_ACCENTS = ["blue", "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate"]
+
+def hex_to_gnome_accent(hex_str: str) -> str:
+    """Map any hex RGB string to the closest native GNOME accent color."""
+    hex_str = hex_str.lstrip("#")
+    if len(hex_str) != 6:
+        return "blue"
+    r = int(hex_str[0:2], 16) / 255.0
+    g = int(hex_str[2:4], 16) / 255.0
+    b = int(hex_str[4:6], 16) / 255.0
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    h_deg = h * 360.0
+
+    if s < 0.12:
+        return "slate"
+    if h_deg < 15 or h_deg >= 345:
+        return "red"
+    elif h_deg < 38:
+        return "orange"
+    elif h_deg < 70:
+        return "yellow"
+    elif h_deg < 165:
+        return "green"
+    elif h_deg < 205:
+        return "teal"
+    elif h_deg < 250:
+        return "blue"
+    elif h_deg < 305:
+        return "purple"
+    else:
+        return "pink"
+
+def get_current_wallpaper() -> str:
+    """Read GNOME's current wallpaper URI and return a local filesystem path."""
+    try:
+        res = subprocess.run(
+            ["gsettings", "get", "org.gnome.desktop.background", "picture-uri-dark"],
+            capture_output=True, text=True, check=True
+        )
+        val = res.stdout.strip().strip("'\"")
+        if not val or val == "":
+            res = subprocess.run(
+                ["gsettings", "get", "org.gnome.desktop.background", "picture-uri"],
+                capture_output=True, text=True, check=True
+            )
+            val = res.stdout.strip().strip("'\"")
+        
+        if val.startswith("file://"):
+            return unquote(urlparse(val).path)
+        return val
+    except Exception as e:
+        print(f"[Error] Failed to read current wallpaper: {e}", file=sys.stderr)
+        return ""
+
+def set_gnome_wallpaper(image_path: str):
+    """Set both standard and dark mode wallpaper in GNOME."""
+    abs_path = os.path.abspath(image_path)
+    uri = f"file://{abs_path}"
+    subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri], check=False)
+    subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri], check=False)
+
+def apply_matugen(image_path: str):
+    """Execute Matugen generation and propagate to GNOME Shell, GTK, and Kitty."""
+    if not os.path.isfile(image_path):
+        print(f"[Error] Wallpaper not found: {image_path}", file=sys.stderr)
+        return False
+
+    print(f"[*] Extracting Material You palette from: {image_path}")
+
+    # Run Matugen template generation
+    matugen_res = subprocess.run(
+        ["matugen", "image", "--source-color-index", "0", image_path],
+        capture_output=True, text=True
+    )
+    if matugen_res.returncode != 0:
+        print(f"[Warn] Matugen returned error: {matugen_res.stderr}", file=sys.stderr)
+
+    # Extract JSON hex colors to compute native GNOME accent
+    json_res = subprocess.run(
+        ["matugen", "image", "--source-color-index", "0", "-j", "hex", image_path],
+        capture_output=True, text=True
+    )
+    if json_res.returncode == 0:
+        try:
+            data = json.loads(json_res.stdout)
+            primary_dark = data.get("colors", {}).get("primary", {}).get("dark", {}).get("color", "")
+            on_primary_dark = data.get("colors", {}).get("on_primary", {}).get("dark", {}).get("color", "#000000")
+            if primary_dark:
+                accent = hex_to_gnome_accent(primary_dark)
+                subprocess.run(
+                    ["gsettings", "set", "org.gnome.desktop.interface", "accent-color", accent],
+                    check=False
+                )
+
+                # Update Pop Shell active window border highlight color
+                clean_hex = primary_dark.lstrip("#")
+                if len(clean_hex) == 6:
+                    r = int(clean_hex[0:2], 16)
+                    g = int(clean_hex[2:4], 16)
+                    b = int(clean_hex[4:6], 16)
+                    pop_color = f"rgba({r}, {g}, {b}, 0.95)"
+                    subprocess.run(
+                        ["gsettings", "set", "org.gnome.shell.extensions.pop-shell", "hint-color-rgba", pop_color],
+                        check=False
+                    )
+
+                # Update Space-Bar workspace pill styling
+                space_bar_css = f""".space-bar {{
+  -natural-hpadding: 12px;
+}}
+
+.space-bar-workspace-label.active {{
+  margin: 0 4px;
+  background-color: {primary_dark};
+  color: {on_primary_dark};
+  border-color: rgba(0,0,0,0);
+  font-weight: 700;
+  border-radius: 6px;
+  border-width: 0px;
+  padding: 3px 10px;
+}}
+
+.space-bar-workspace-label.inactive {{
+  margin: 0 4px;
+  background-color: rgba(0,0,0,0);
+  color: rgba(255,255,255,0.85);
+  border-color: rgba(0,0,0,0);
+  font-weight: 700;
+  border-radius: 4px;
+  border-width: 0px;
+  padding: 3px 8px;
+}}
+
+.space-bar-workspace-label.inactive.empty {{
+  margin: 0 4px;
+  background-color: rgba(0,0,0,0);
+  color: rgba(255,255,255,0.4);
+  border-color: rgba(0,0,0,0);
+  font-weight: 700;
+  border-radius: 4px;
+  border-width: 0px;
+  padding: 3px 8px;
+}}"""
+                val = "'" + space_bar_css.replace("'", "\\'") + "'"
+                subprocess.run(
+                    ["dconf", "write", "/org/gnome/shell/extensions/space-bar/appearance/application-styles", val],
+                    check=False
+                )
+        except Exception as e:
+            print(f"[Warn] Failed to parse Matugen JSON: {e}", file=sys.stderr)
+
+    # Signal Kitty and Ulauncher to live reload colors
+    subprocess.run(["pkill", "-SIGUSR1", "-u", os.environ.get("USER", "zoecyber"), "kitty"], check=False)
+    subprocess.run(["pkill", "-u", os.environ.get("USER", "zoecyber"), "-HUP", "ulauncher"], check=False)
+
+    # Notification
+    try:
+        subprocess.run(
+            ["notify-send", "-a", "Material You", "-i", "preferences-desktop-theme",
+             "Material You Applied", f"Dynamic theme generated from {os.path.basename(image_path)}"],
+            check=False
+        )
+    except Exception:
+        pass
+
+    print("[+] Material You palette applied successfully across GNOME, GTK 3/4, and Kitty.")
+    return True
+
+def pick_random_wallpaper() -> str:
+    """Find a random wallpaper in ~/Pictures/Wallpapers or ~/Pictures."""
+    search_dir = WALLPAPERS_DIR if WALLPAPERS_DIR.is_dir() else FALLBACK_DIR
+    extensions = ("*.png", "*.jpg", "*.jpeg", "*.webp")
+    files = []
+    for ext in extensions:
+        files.extend(glob.glob(str(search_dir / ext)))
+        files.extend(glob.glob(str(search_dir / "**" / ext), recursive=True))
+
+    valid = [f for f in files if os.path.isfile(f)]
+    if not valid:
+        print("[Error] No wallpapers found in Pictures directory.", file=sys.stderr)
+        return ""
+    return random.choice(valid)
+
+def watch_mode():
+    """Watch for GNOME wallpaper changes and auto-trigger Matugen."""
+    print("[*] Starting GNOME Wallpaper Watcher daemon...")
+    current = get_current_wallpaper()
+    if current and os.path.isfile(current):
+        apply_matugen(current)
+
+    proc = subprocess.Popen(
+        ["gsettings", "monitor", "org.gnome.desktop.background", "picture-uri-dark"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1
+    )
+    last_applied = current
+    for line in iter(proc.stdout.readline, ''):
+        line = line.strip()
+        if not line:
+            continue
+        new_wp = get_current_wallpaper()
+        if new_wp and new_wp != last_applied and os.path.isfile(new_wp):
+            last_applied = new_wp
+            apply_matugen(new_wp)
+
+def main():
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        if arg in ("-h", "--help"):
+            print(__doc__)
+            sys.exit(0)
+        elif arg == "--watch":
+            watch_mode()
+            return
+        elif arg == "--random":
+            wp = pick_random_wallpaper()
+            if wp:
+                set_gnome_wallpaper(wp)
+                apply_matugen(wp)
+            return
+        elif os.path.isfile(arg):
+            set_gnome_wallpaper(arg)
+            apply_matugen(arg)
+            return
+        else:
+            print(f"[Error] Invalid option or file: {arg}", file=sys.stderr)
+            sys.exit(1)
+
+    # Default action: re-theme current wallpaper
+    current = get_current_wallpaper()
+    if current and os.path.isfile(current):
+        apply_matugen(current)
+    else:
+        print("[Warn] No active wallpaper file detected. Selecting a random one...")
+        wp = pick_random_wallpaper()
+        if wp:
+            set_gnome_wallpaper(wp)
+            apply_matugen(wp)
+
+if __name__ == "__main__":
+    main()

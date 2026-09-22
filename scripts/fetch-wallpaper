@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""
+Architect's Note:
+Curated Wallpaper Fetcher & Material You Pipeline Integrator
+------------------------------------------------------------
+Fetches high-resolution (1080p / 1440p / 4K) wallpapers from Wallhaven and yande.re
+(the original end4-pC booru source), then automatically updates GNOME, GTK 3/4,
+and Kitty terminal with matching Material You palettes.
+
+Modes:
+    Default:   Strictly Safe-For-Work (SFW)
+    --spicy:   Suggestive / ecchi / sketchy anime art (Wallhaven Sketchy)
+    --booru:   Direct yande.re booru scraper (end4-pC imageboard source)
+    --nsfw:    Explicit mode (Wallhaven NSFW / yande.re explicit)
+
+Usage:
+    fetch-wallpaper                     # Clean SFW aesthetic wallpaper & apply
+    fetch-wallpaper anime               # Clean anime aesthetic & apply
+    fetch-wallpaper --spicy             # Random spicy / sketchy anime wallpaper & apply
+    fetch-wallpaper --booru --spicy     # Random yande.re booru wallpaper & apply
+    fetch-wallpaper --booru --nsfw      # Random yande.re explicit wallpaper & apply
+    fetch-wallpaper -n 5 --booru --spicy # Download 5 fresh wallpapers to library
+"""
+
+import sys
+import os
+import argparse
+import urllib.request
+import urllib.parse
+import json
+import subprocess
+import random
+from pathlib import Path
+
+WALLPAPERS_DIR = Path.home() / "Pictures" / "Wallpapers"
+WALLPAPERS_DIR.mkdir(parents=True, exist_ok=True)
+
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+PRESETS = {
+    "anime": {"categories": "010", "q": ""},
+    "general": {"categories": "100", "q": ""},
+    "nature": {"categories": "100", "q": "nature landscape"},
+    "landscape": {"categories": "100", "q": "landscape"},
+    "cyberpunk": {"categories": "110", "q": "cyberpunk sci-fi"},
+    "minimal": {"categories": "100", "q": "minimalism"},
+    "space": {"categories": "100", "q": "space galaxy nebula"},
+    "urban": {"categories": "100", "q": "city night street architecture"},
+}
+
+def query_wallhaven(query="", categories="110", purity="100", sorting="random"):
+    """
+    Query Wallhaven API with random pagination for maximum variety.
+    purity: 100 = SFW, 010 = Sketchy, 110 = SFW+Sketchy, 111 = All
+    """
+    page = random.randint(1, 10) if sorting == "random" else 1
+    params = {
+        "categories": categories,
+        "purity": purity,
+        "sorting": sorting,
+        "atleast": "1920x1080",
+        "ratios": "16x9,16x10",
+        "page": str(page)
+    }
+    if query:
+        params["q"] = query
+
+    url = f"https://wallhaven.cc/api/v1/search?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+            results = data.get("data", [])
+            random.shuffle(results)
+            return results
+    except Exception as e:
+        print(f"[Error] Wallhaven API request failed: {e}", file=sys.stderr)
+        return []
+
+def query_yandere(rating="q", query="", target_count=5, random_mode=True):
+    """
+    Query yande.re API (original end4-pC booru source).
+    rating: 's' (safe), 'q' (questionable/spicy), 'e' (explicit)
+    Uses order:random and pagination to collect sufficient horizontal desktop wallpapers.
+    """
+    order_tag = "order:random" if random_mode else "order:score"
+    results = []
+    seen_ids = set()
+    pages_tried = 0
+    max_pages = 6
+
+    while len(results) < target_count and pages_tried < max_pages:
+        tags = [f"rating:{rating}", order_tag]
+        if query:
+            tags.append(query)
+
+        page = random.randint(1, 30) if random_mode and not query else (pages_tried + 1)
+        params = {"limit": 100, "tags": " ".join(tags), "page": page}
+        url = f"https://yande.re/post.json?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+                if not data:
+                    break
+                for item in data:
+                    item_id = item.get("id")
+                    if item_id in seen_ids:
+                        continue
+                    seen_ids.add(item_id)
+
+                    # Filter for desktop horizontal aspect ratio
+                    w = item.get("width", 0)
+                    h = item.get("height", 1)
+                    if w / h >= 1.3 and w >= 1600:
+                        file_url = item.get("sample_url") or item.get("file_url")
+                        if file_url:
+                            results.append({
+                                "id": f"yandere_{item_id}",
+                                "path": file_url,
+                                "resolution": f"{w}x{h}",
+                                "rating": item.get("rating", "q")
+                            })
+        except Exception as e:
+            print(f"[Warn] yande.re fetch notice on page {page}: {e}", file=sys.stderr)
+            break
+        pages_tried += 1
+
+    random.shuffle(results)
+    return results
+
+def download_image(img_url: str, dest_path: Path) -> bool:
+    """Download the full-res image with a clean user-agent."""
+    req = urllib.request.Request(img_url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp, open(dest_path, "wb") as f:
+            f.write(resp.read())
+        return True
+    except Exception as e:
+        print(f"[Error] Failed to download {img_url}: {e}", file=sys.stderr)
+        return False
+
+def apply_matugen_theme(image_path: Path):
+    """Invoke matugen-gnome bridge to update desktop, GTK, and terminal."""
+    bridge = Path.home() / ".local" / "bin" / "matugen-gnome"
+    if bridge.is_file():
+        subprocess.run([str(bridge), str(image_path)], check=False)
+    else:
+        uri = f"file://{image_path.resolve()}"
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri], check=False)
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri], check=False)
+
+def main():
+    parser = argparse.ArgumentParser(description="Fetch aesthetic, anime, or spicy wallpapers with Matugen Material You theming.")
+    parser.add_argument("query", nargs="?", default="", help="Category preset (anime, nature, minimal, cyberpunk) or search keywords")
+    parser.add_argument("-n", "--batch", type=int, default=1, help="Number of fresh wallpapers to download (e.g. -n 5)")
+    parser.add_argument("--spicy", "--sketchy", action="store_true", help="Fetch spicy/sketchy/ecchi anime wallpapers")
+    parser.add_argument("--booru", "--yandere", action="store_true", help="Fetch from yande.re booru (end4-pC imageboard source)")
+    parser.add_argument("--nsfw", action="store_true", help="Enable explicit 18+ mode")
+    parser.add_argument("--no-apply", action="store_true", help="Download only without applying as active wallpaper")
+    parser.add_argument("--top", action="store_true", help="Sort by top-rated instead of random")
+
+    args = parser.parse_args()
+
+    q_lower = args.query.lower().strip()
+    sorting = "toplist" if args.top else "random"
+
+    items = []
+    if args.booru:
+        # yande.re booru scraper with random sorting
+        rating = "e" if args.nsfw else ("q" if args.spicy else "s")
+        mode_label = "Explicit" if rating == "e" else ("Spicy/Ecchi" if rating == "q" else "Safe")
+        print(f"[*] Querying yande.re Booru ({mode_label} | Random Desktop 1080p+ | Query: '{args.query or 'random'}')...")
+        items = query_yandere(rating=rating, query=args.query, target_count=max(10, args.batch * 2), random_mode=(not args.top))
+    else:
+        # Wallhaven
+        if args.nsfw:
+            purity = "111"
+            mode_label = "NSFW / All"
+        elif args.spicy:
+            purity = "010"  # Sketchy only
+            mode_label = "Spicy / Sketchy"
+        else:
+            purity = "100"  # Strictly SFW
+            mode_label = "Clean SFW"
+
+        if q_lower in PRESETS:
+            preset = PRESETS[q_lower]
+            categories = preset["categories"]
+            query_str = preset["q"]
+        elif q_lower:
+            categories = "111"
+            query_str = args.query
+        else:
+            categories = "010" if (args.spicy or args.nsfw) else "110"
+            query_str = ""
+
+        print(f"[*] Querying Wallhaven ({mode_label} | Random 1080p+ | Query: '{query_str or 'curated random'}')...")
+        items = query_wallhaven(query=query_str, categories=categories, purity=purity, sorting=sorting)
+
+    if not items:
+        print("[!] No results returned. Please check your query or connection.")
+        sys.exit(1)
+
+    downloaded = []
+    for item in items:
+        if len(downloaded) >= args.batch:
+            break
+
+        img_id = item.get("id")
+        img_url = item.get("path")
+        ext = img_url.split(".")[-1].split("?")[0]
+        prefix = "spicy_" if (args.spicy or args.nsfw) else ""
+        dest = WALLPAPERS_DIR / f"{prefix}{img_id}.{ext}"
+
+        if dest.is_file():
+            # Skip existing file so we always get a NEW fresh wallpaper
+            continue
+
+        print(f"[+] Downloading: {dest.name} ({item.get('resolution', 'HD')})...")
+        if download_image(img_url, dest):
+            downloaded.append(dest)
+
+    if not downloaded:
+        print("[!] All fetched items were already in your library. Run again for another batch!")
+        sys.exit(0)
+
+    print(f"[✓] Successfully downloaded {len(downloaded)} fresh wallpaper(s) to ~/Pictures/Wallpapers.")
+
+    # Apply the first downloaded wallpaper if not disabled
+    if not args.no_apply and downloaded:
+        target = downloaded[0]
+        print(f"[*] Applying wallpaper & generating Material You theme: {target.name}")
+        apply_matugen_theme(target)
+
+if __name__ == "__main__":
+    main()

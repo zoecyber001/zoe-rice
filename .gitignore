@@ -1,0 +1,25 @@
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Backups created during install
+*.bak
+*.orig
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Thumbnails
+.cache/
+
+# Personal wallpapers (not redistributable)
+wallpapers/
+
+# Logs
+*.log

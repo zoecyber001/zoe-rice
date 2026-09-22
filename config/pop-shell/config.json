@@ -1,0 +1,41 @@
+{
+  "float": [
+    {
+      "class": "pop-shell-example",
+      "title": "pop-shell-example"
+    },
+    {
+      "class": "ulauncher"
+    },
+    {
+      "class": "Ulauncher"
+    },
+    {
+      "class": "__main__.py"
+    },
+    {
+      "class": "io.ulauncher.Ulauncher"
+    },
+    {
+      "title": "Ulauncher"
+    },
+    {
+      "title": "Ulauncher - Application Launcher"
+    },
+    {
+      "class": "wallpaper-picker"
+    },
+    {
+      "title": "Wallpaper Studio"
+    }
+  ],
+  "skiptaskbarhidden": [
+    {
+      "class": "ulauncher"
+    },
+    {
+      "class": "io.ulauncher.Ulauncher"
+    }
+  ],
+  "log_on_focus": false
+}

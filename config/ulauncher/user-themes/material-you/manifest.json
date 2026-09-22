@@ -1,0 +1,12 @@
+{
+  "manifest_version": "1",
+  "name": "material-you",
+  "display_name": "Material You (Dynamic M3)",
+  "extend_theme": "dark",
+  "css_file": "theme.css",
+  "css_file_gtk_3.20+": "theme-gtk-3.20.css",
+  "matched_text_hl_colors": {
+    "when_selected": "#acc7ff",
+    "when_not_selected": "#acc7ff"
+  }
+}

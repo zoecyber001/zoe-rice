@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""
+Architect's Note:
+Native Libadwaita Material You Wallpaper Gallery & Studio
+---------------------------------------------------------
+High-performance visual wallpaper browser and picker built on GTK 4 + Libadwaita.
+Supports thumbnail caching, instant search filtering, one-click theming via matugen-gnome,
+and online wallpaper fetching directly from the UI.
+"""
+
+import sys
+import os
+import glob
+import threading
+import subprocess
+from pathlib import Path
+from PIL import Image
+
+import gi
+gi.require_version('Gtk', '4.0')
+gi.require_version('Adw', '1')
+from gi.repository import Gtk, Adw, GLib, Gio
+
+WALLPAPERS_DIR = Path.home() / "Pictures" / "Wallpapers"
+CACHE_DIR = Path.home() / ".cache" / "wallpaper-picker"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+THUMB_WIDTH = 280
+THUMB_HEIGHT = 158
+
+class WallpaperPickerApp(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="org.zoecyber.WallpaperPicker",
+                         flags=Gio.ApplicationFlags.FLAGS_NONE)
+        self.window = None
+        self.wallpapers = []
+        self.flowbox = None
+        self.search_entry = None
+        self.current_wallpaper = ""
+        self._load_gen = 0
+
+    def do_activate(self):
+        if not self.window:
+            self.build_ui()
+        self.load_wallpapers()
+        self.window.present()
+
+    def get_current_wallpaper(self) -> str:
+        try:
+            res = subprocess.run(
+                ["gsettings", "get", "org.gnome.desktop.background", "picture-uri-dark"],
+                capture_output=True, text=True, check=True
+            )
+            val = res.stdout.strip().strip("'\"")
+            if val.startswith("file://"):
+                val = val[7:]
+            return val
+        except Exception:
+            return ""
+
+    def get_thumbnail(self, img_path: Path) -> Path:
+        """Create or retrieve a cached thumbnail."""
+        thumb_name = f"thumb_{img_path.stat().st_mtime}_{img_path.name}.jpg"
+        thumb_path = CACHE_DIR / thumb_name
+        if not thumb_path.is_file():
+            try:
+                with Image.open(img_path) as im:
+                    im.thumbnail((THUMB_WIDTH, THUMB_HEIGHT), Image.Resampling.LANCZOS)
+                    # Convert RGBA to RGB for JPEG save
+                    if im.mode in ("RGBA", "P"):
+                        bg = Image.new("RGB", im.size, (25, 25, 25))
+                        if im.mode == "RGBA":
+                            bg.paste(im, mask=im.split()[3])
+                        else:
+                            bg.paste(im)
+                        im = bg
+                    im.save(thumb_path, "JPEG", quality=85)
+            except Exception as e:
+                return img_path
+        return thumb_path
+
+    def build_ui(self):
+        self.window = Adw.ApplicationWindow(application=self, title="Wallpaper Studio")
+        self.window.set_default_size(980, 680)
+
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.window.set_content(main_box)
+
+        # Header Bar
+        header = Adw.HeaderBar()
+        main_box.append(header)
+
+        # Title widget: Search bar
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_placeholder_text("Search wallpapers...")
+        self.search_entry.set_hexpand(True)
+        self.search_entry.connect("search-changed", self.on_search_changed)
+        header.set_title_widget(self.search_entry)
+
+        # Action Buttons in Header
+        # Shuffle / Random button
+        btn_random = Gtk.Button(icon_name="media-playlist-shuffle-symbolic")
+        btn_random.set_tooltip_text("Apply Random Wallpaper")
+        btn_random.connect("clicked", self.on_random_clicked)
+        header.pack_start(btn_random)
+
+        # Fetch SFW button
+        btn_sfw = Gtk.Button(icon_name="folder-download-symbolic")
+        btn_sfw.set_tooltip_text("Fetch New Clean Wallpaper (Wallhaven)")
+        btn_sfw.connect("clicked", lambda b: self.trigger_fetch(spicy=False))
+        header.pack_start(btn_sfw)
+
+        # Fetch Spicy / Booru button
+        btn_spicy = Gtk.Button(icon_name="emblem-favorite-symbolic")
+        btn_spicy.set_tooltip_text("Fetch & Apply Spicy Wallpaper (yande.re booru)")
+        btn_spicy.connect("clicked", lambda b: self.trigger_fetch(spicy=True))
+        header.pack_start(btn_spicy)
+
+        # Batch Fetch Booru button
+        btn_batch = Gtk.Button(icon_name="list-add-symbolic")
+        btn_batch.set_tooltip_text("Batch Download 5 Booru Wallpapers to Library")
+        btn_batch.connect("clicked", lambda b: self.trigger_batch_fetch())
+        header.pack_start(btn_batch)
+
+        # Refresh Library button
+        btn_refresh = Gtk.Button(icon_name="view-refresh-symbolic")
+        btn_refresh.set_tooltip_text("Refresh Gallery")
+        btn_refresh.connect("clicked", lambda b: self.load_wallpapers())
+        header.pack_end(btn_refresh)
+
+        # Scrolled Grid View
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        scrolled.set_hexpand(True)
+        main_box.append(scrolled)
+
+        self.flowbox = Gtk.FlowBox()
+        self.flowbox.set_valign(Gtk.Align.START)
+        self.flowbox.set_max_children_per_line(5)
+        self.flowbox.set_min_children_per_line(2)
+        self.flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.flowbox.set_homogeneous(True)
+        self.flowbox.set_row_spacing(16)
+        self.flowbox.set_column_spacing(16)
+        self.flowbox.set_margin_top(16)
+        self.flowbox.set_margin_bottom(16)
+        self.flowbox.set_margin_start(16)
+        self.flowbox.set_margin_end(16)
+        self.flowbox.connect("child-activated", self.on_child_activated)
+
+        scrolled.set_child(self.flowbox)
+
+    def load_wallpapers(self):
+        """Scans ~/Pictures/Wallpapers and populates the grid with deduplicated items."""
+        self.current_wallpaper = self.get_current_wallpaper()
+        self._load_gen += 1
+        gen = self._load_gen
+
+        # Clear existing
+        while child := self.flowbox.get_first_child():
+            self.flowbox.remove(child)
+
+        extensions = {".png", ".jpg", ".jpeg", ".webp"}
+        files = []
+        seen = set()
+
+        if WALLPAPERS_DIR.is_dir():
+            for p in WALLPAPERS_DIR.rglob("*"):
+                if p.is_file() and p.suffix.lower() in extensions:
+                    resolved = str(p.resolve())
+                    if resolved not in seen:
+                        seen.add(resolved)
+                        files.append(resolved)
+
+        self.wallpapers = sorted(files, key=os.path.getmtime, reverse=True)
+
+        # Load thumbnails asynchronously with generation check to prevent duplicate worker races
+        def worker(current_gen):
+            for f in self.wallpapers:
+                if current_gen != self._load_gen:
+                    return
+                path = Path(f)
+                thumb = self.get_thumbnail(path)
+                if current_gen != self._load_gen:
+                    return
+                GLib.idle_add(self._safe_add_wallpaper_item, current_gen, path, thumb)
+
+        threading.Thread(target=worker, args=(gen,), daemon=True).start()
+
+    def _safe_add_wallpaper_item(self, gen: int, path: Path, thumb_path: Path):
+        if gen == self._load_gen:
+            self.add_wallpaper_item(path, thumb_path)
+
+    def add_wallpaper_item(self, path: Path, thumb_path: Path):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.set_size_request(THUMB_WIDTH, THUMB_HEIGHT + 32)
+        box.wallpaper_path = str(path.resolve())
+
+        # Card container with CSS class
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        card.add_css_class("card")
+        card.set_overflow(Gtk.Overflow.HIDDEN)
+
+        # Picture
+        pic = Gtk.Picture.new_for_filename(str(thumb_path))
+        pic.set_can_shrink(True)
+        pic.set_size_request(THUMB_WIDTH, THUMB_HEIGHT)
+        card.append(pic)
+        box.append(card)
+
+        # Label
+        name = path.name
+        if len(name) > 26:
+            name = name[:12] + "…" + name[-10:]
+        label = Gtk.Label(label=name)
+        label.set_ellipsize(3) # PANGO_ELLIPSIZE_END
+        label.add_css_class("caption")
+
+        if str(path.resolve()) == self.current_wallpaper:
+            label.set_markup(f"<b><span foreground='#acc7ff'>✓ {name}</span></b>")
+            card.add_css_class("accent")
+
+        box.append(label)
+        self.flowbox.append(box)
+
+    def on_child_activated(self, flowbox, child):
+        widget = child.get_child()
+        path = getattr(widget, "wallpaper_path", "")
+        if path and os.path.isfile(path):
+            print(f"[*] Selected: {path}")
+            bridge = Path.home() / ".local" / "bin" / "matugen-gnome"
+            subprocess.Popen([str(bridge), path])
+            self.current_wallpaper = path
+            # Refresh selection labels
+            self.load_wallpapers()
+
+    def on_search_changed(self, entry):
+        query = entry.get_text().lower().strip()
+        child = self.flowbox.get_first_child()
+        while child:
+            widget = child.get_child()
+            path = getattr(widget, "wallpaper_path", "")
+            match = query in Path(path).name.lower() if query else True
+            child.set_visible(match)
+            child = child.get_next_sibling()
+
+    def on_random_clicked(self, btn):
+        bridge = Path.home() / ".local" / "bin" / "matugen-gnome"
+        subprocess.Popen([str(bridge), "--random"])
+        GLib.timeout_add(1500, self.load_wallpapers)
+
+    def trigger_fetch(self, spicy=False):
+        fetcher = Path.home() / ".local" / "bin" / "fetch-wallpaper"
+        cmd = [str(fetcher), "--booru", "--spicy"] if spicy else [str(fetcher)]
+        
+        try:
+            label = "Booru" if spicy else "Wallhaven"
+            subprocess.run([
+                "notify-send", "-a", "Wallpaper Studio", "-i", "folder-download-symbolic",
+                f"Fetching {label}", f"Downloading and applying fresh {label} wallpaper..."
+            ], check=False)
+        except Exception:
+            pass
+
+        def run():
+            subprocess.run(cmd)
+            GLib.timeout_add(1200, self.load_wallpapers)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def trigger_batch_fetch(self):
+        fetcher = Path.home() / ".local" / "bin" / "fetch-wallpaper"
+        cmd = [str(fetcher), "--booru", "--spicy", "-n", "5", "--no-apply"]
+        
+        try:
+            subprocess.run([
+                "notify-send", "-a", "Wallpaper Studio", "-i", "folder-download-symbolic",
+                "Batch Download Started", "Fetching 5 fresh Booru wallpapers to your library..."
+            ], check=False)
+        except Exception:
+            pass
+
+        def run():
+            subprocess.run(cmd)
+            try:
+                subprocess.run([
+                    "notify-send", "-a", "Wallpaper Studio", "-i", "emblem-default-symbolic",
+                    "Batch Complete", "5 fresh Booru wallpapers added to your gallery."
+                ], check=False)
+            except Exception:
+                pass
+            GLib.idle_add(self.load_wallpapers)
+
+        threading.Thread(target=run, daemon=True).start()
+
+def main():
+    app = WallpaperPickerApp()
+    return app.run(sys.argv)
+
+if __name__ == "__main__":
+    sys.exit(main())

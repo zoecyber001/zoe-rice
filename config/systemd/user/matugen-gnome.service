@@ -1,0 +1,12 @@
+[Unit]
+Description=Matugen GNOME Wallpaper Color Sync Daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/zoecyber/.local/bin/matugen-gnome --watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

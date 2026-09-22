@@ -3,7 +3,12 @@
 **GNOME + Pop Shell + Material You** — a keyboard-driven, dynamically themed Fedora desktop that feels like Hyprland but runs on the stability of GNOME Wayland.
 
 <p align="center">
-  <img src="assets/preview.png" alt="Desktop Preview" width="800">
+  <img src="assets/preview.png" alt="Desktop Preview" width="850">
+</p>
+
+<p align="center">
+  <img src="assets/ulauncher.png" alt="Ulauncher Material You Spotlight" width="420">&nbsp;
+  <img src="assets/wallpaper-studio.png" alt="Wallpaper Studio Gallery" width="420">
 </p>
 
 ---

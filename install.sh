@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ┌─────────────────────────────────────────────────────────────────────┐
-# │  zoecyber-dotfiles installer                                       │
+# │  zoe-rice installer                                               │
 # │  Fedora 44 · GNOME 50 · Pop Shell · Material You                  │
 # │                                                                     │
 # │  Idempotent: safe to re-run. Backs up existing configs before      │
@@ -11,7 +11,7 @@ set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d_%H%M%S)"
-LOG_FILE="/tmp/zoecyber-dotfiles-install.log"
+LOG_FILE="/tmp/zoe-rice-install.log"
 DRY_RUN=false
 SKIP_DNF=false
 SKIP_EXTENSIONS=false

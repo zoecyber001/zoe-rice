@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ┌─────────────────────────────────────────────────────────────────────┐
-# │  zoecyber-dotfiles uninstaller                                     │
+# │  zoe-rice uninstaller                                             │
 # │  Removes symlinks, restores backups, disables services.            │
 # └─────────────────────────────────────────────────────────────────────┘
 
@@ -21,7 +21,7 @@ DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_BASE="$HOME/.dotfiles-backup"
 
 echo -e "${BOLD}${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BOLD}${RED}  zoecyber-dotfiles Uninstaller${NC}"
+echo -e "${BOLD}${RED}  zoe-rice Uninstaller${NC}"
 echo -e "${BOLD}${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 

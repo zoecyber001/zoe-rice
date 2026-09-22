@@ -1,4 +1,4 @@
-# zoecyber-dotfiles
+# zoe-rice
 
 **GNOME + Pop Shell + Material You** — a keyboard-driven, dynamically themed Fedora desktop that feels like Hyprland but runs on the stability of GNOME Wayland.
 
@@ -97,7 +97,7 @@ Wallpaper ──▶ Matugen (Material 3 Engine)
 ### Quick Install
 
 ```bash
-git clone https://github.com/zoecyber/zoecyber-dotfiles.git ~/.dotfiles
+git clone https://github.com/zoecyber001/zoe-rice.git ~/.dotfiles
 cd ~/.dotfiles
 chmod +x install.sh uninstall.sh
 ./install.sh
@@ -138,7 +138,7 @@ Removes all symlinks, disables services, and restores your backed-up configs.
 ## File Structure
 
 ```
-zoecyber-dotfiles/
+zoe-rice/
 ├── install.sh                          # Main installer (9 phases)
 ├── uninstall.sh                        # Clean removal & backup restore
 ├── config/

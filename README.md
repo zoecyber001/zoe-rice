@@ -195,6 +195,30 @@ zoe-rice/
 
 ---
 
+## Troubleshooting / FAQ
+
+**Ulauncher isn't floating / keeps getting tiled!**
+Make sure the Ulauncher python patch ran successfully. You can manually run it via `python3 ~/.dotfiles/patches/ulauncher-popshell-float.py`. Pop Shell will then properly float it as a Quake window.
+
+**My Material You colors didn't update!**
+The desktop colors are extracted automatically when the wallpaper changes via the `matugen-gnome` watcher daemon.
+- Press `Super+w` to open Wallpaper Studio and select an image.
+- Or press `Ctrl+Super+t` to randomize a theme.
+- Ensure `matugen-gnome.service` is running: `systemctl --user status matugen-gnome.service`
+
+**How do I update the rice?**
+```bash
+cd ~/.dotfiles
+git pull
+./install.sh
+```
+The installer is strictly idempotent, meaning re-running it is completely safe and will cleanly re-apply patches and symlinks.
+
+**Pop Shell borders are showing on full-screen apps!**
+Toggle Smart Gaps via the Pop Shell menu in the top right of your GNOME panel, or set `smart-gaps` to true in `~/.config/pop-shell/config.json`.
+
+---
+
 ## Credits
 
 - [Pop Shell](https://github.com/pop-os/shell) — Tiling engine

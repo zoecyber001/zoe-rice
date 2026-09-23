@@ -416,6 +416,12 @@ EOF
 )
     gsettings set org.gnome.shell enabled-extensions "$ENABLED_EXTENSIONS"
     log "Enabled GNOME extensions"
+    
+    # Explicitly apply fonts and themes in case dconf load was skipped or incomplete
+    gsettings set org.gnome.desktop.interface icon-theme 'kora'
+    gsettings set org.gnome.desktop.interface monospace-font-name 'Monaspace Neon 10'
+    gsettings set org.gnome.desktop.interface cursor-theme 'Bibata-Modern-Classic' 2>/dev/null || true
+    log "Applied Kora icons and Monaspace Neon font"
 fi
 
 # ══════════════════════════════════════════════════════════════════

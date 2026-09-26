@@ -165,6 +165,8 @@ zoe-rice/
 │   ├── floating-panel.dconf
 │   ├── burn-my-windows.dconf
 │   ├── dash-to-dock.dconf
+│   ├── rounded-windows.dconf
+│   ├── shell.dconf
 │   ├── desktop-interface.dconf
 │   ├── desktop-wm.dconf
 │   └── mutter.dconf

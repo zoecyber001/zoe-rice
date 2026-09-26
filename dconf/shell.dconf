@@ -1,4 +1,4 @@
 [/]
-enabled-extensions=['blur-my-shell@aunetx', 'background-logo@fedorahosted.org', 'dash-to-dock@micxgx.gmail.com', 'space-bar@luchrioh', 'just-perfection-desktop@just-perfection', 'floating-panel@aylur', 'widgets@aylur', 'clipboard-indicator@tudmotu.com', 'burn-my-windows@schneegans.github.com', 'hibernate-status@dromi', 'apps-menu@gnome-shell-extensions.gcampax.github.com', 'pop-shell@system76.com']
-disabled-extensions=@as []
+enabled-extensions=['blur-my-shell@aunetx', 'background-logo@fedorahosted.org', 'dash-to-dock@micxgx.gmail.com', 'space-bar@luchrioh', 'just-perfection-desktop@just-perfection', 'floating-panel@aylur', 'widgets@aylur', 'clipboard-indicator@tudmotu.com', 'burn-my-windows@schneegans.github.com', 'hibernate-status@dromi', 'apps-menu@gnome-shell-extensions.gcampax.github.com', 'pop-shell@system76.com', 'rounded-windows@marcosgt.github.io']
+disabled-extensions=['quick-settings-audio-panel@rayzeq.github.io']
 welcome-dialog-last-shown-version='50.0'

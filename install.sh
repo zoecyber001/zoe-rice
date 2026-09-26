@@ -250,6 +250,7 @@ EXTENSIONS=(
     "clipboard-indicator@tudmotu.com"
     "hibernate-status@dromi"
     "widgets@aylur"
+    "rounded-windows@marcosgt.github.io"
 )
 
 if $SKIP_EXTENSIONS; then
@@ -389,6 +390,7 @@ else
         ["burn-my-windows.dconf"]="/org/gnome/shell/extensions/burn-my-windows/"
         ["clipboard-indicator.dconf"]="/org/gnome/shell/extensions/clipboard-indicator/"
         ["widgets.dconf"]="/org/gnome/shell/extensions/widgets/"
+        ["rounded-windows.dconf"]="/org/gnome/shell/extensions/rounded-windows/"
         ["desktop-interface.dconf"]="/org/gnome/desktop/interface/"
         ["desktop-wm.dconf"]="/org/gnome/desktop/wm/"
         ["mutter.dconf"]="/org/gnome/mutter/"
@@ -411,7 +413,7 @@ else
 
     # Enable extensions
     ENABLED_EXTENSIONS=$(cat <<'EOF'
-['pop-shell@system76.com', 'space-bar@luchrioh', 'blur-my-shell@aunetx', 'burn-my-windows@schneegans.github.com', 'dash-to-dock@micxgx.gmail.com', 'floating-panel@aylur', 'just-perfection-desktop@just-perfection', 'clipboard-indicator@tudmotu.com', 'hibernate-status@dromi', 'widgets@aylur', 'apps-menu@gnome-shell-extensions.gcampax.github.com', 'background-logo@fedorahosted.org']
+['pop-shell@system76.com', 'space-bar@luchrioh', 'blur-my-shell@aunetx', 'burn-my-windows@schneegans.github.com', 'dash-to-dock@micxgx.gmail.com', 'floating-panel@aylur', 'just-perfection-desktop@just-perfection', 'clipboard-indicator@tudmotu.com', 'hibernate-status@dromi', 'widgets@aylur', 'apps-menu@gnome-shell-extensions.gcampax.github.com', 'background-logo@fedorahosted.org', 'rounded-windows@marcosgt.github.io']
 EOF
 )
     gsettings set org.gnome.shell enabled-extensions "$ENABLED_EXTENSIONS"
